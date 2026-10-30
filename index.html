@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ja"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#10243a"><meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Fly-by計算">
+<link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-192.png">
+<title>Fly-by 旋回開始距離計算</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1725;--panel:#14263a;--line:#2c4661;--text:#f3f7fb;--muted:#a9bbcc;--accent:#63c5e8}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(160deg,#0b1725,#10243a 60%,#0b1725);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif;padding:env(safe-area-inset-top) 16px calc(24px + env(safe-area-inset-bottom))}
+main{max-width:620px;margin:auto}header{padding:24px 2px 16px}h1{font-size:22px;margin:0 0 6px}.sub,.note,footer{color:var(--muted);font-size:12px;line-height:1.65}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:17px;margin:12px 0}h2{font-size:15px;margin:0 0 14px;color:#d7e8f5}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}.field{min-width:0}label{display:block;color:var(--muted);font-size:12px;margin-bottom:7px}
+input,select{width:100%;height:46px;border:1px solid #3a5875;border-radius:10px;background:#0d1d2d;color:var(--text);font-size:17px;padding:0 11px}
+.unit{font-size:11px;color:var(--muted);margin-top:5px}.rangehead{display:flex;justify-content:space-between;align-items:center}.rangehead output{font-weight:700;color:var(--accent);font-size:18px}
+input[type=range]{padding:0;border:0;background:transparent;accent-color:var(--accent);height:28px}
+.result{background:linear-gradient(145deg,#12344b,#10283d);border:1px solid #32627a;border-radius:16px;padding:18px}.eyebrow{font-size:12px;color:#b8d8e8}
+.big{font-size:46px;font-weight:750;line-height:1.2;margin:7px 0 2px;font-variant-numeric:tabular-nums}.big small{font-size:17px;font-weight:600}
+.status{font-size:13px;margin-top:10px;line-height:1.55}.good{color:#7dd3a7}.warn{color:#ffca73}.bad{color:#ff8d8d}
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}.metric{background:#0d2031;border:1px solid #28445d;border-radius:11px;padding:11px}
+.metric span{display:block;font-size:11px;color:var(--muted);margin-bottom:5px}.metric strong{font-size:17px;font-variant-numeric:tabular-nums}
+.actions{display:flex;gap:10px;margin-top:14px}button{border:1px solid #3b5b76;border-radius:10px;background:#1a3852;color:var(--text);padding:11px 14px;font-size:13px;font-weight:600}
+footer{padding:8px 3px}@media(max-width:380px){.big{font-size:40px}.panel{padding:14px}}
+</style></head><body><main>
+<header><h1>Fly-by 旋回開始距離計算</h1><div class="sub">旋回率 3°/秒固定 · 距離 NM · 速度 kt</div></header>
+<section class="panel"><h2>飛行条件</h2><div class="grid">
+<div class="field"><label for="tas">TAS（真対気速度）</label><input id="tas" type="number" inputmode="decimal" min="1" max="1000" value="120"><div class="unit">kt</div></div>
+<div class="field"><label for="heading">旋回開始時の機首方位</label><input id="heading" type="number" inputmode="decimal" min="0" max="359" value="000"><div class="unit">°</div></div>
+<div class="field"><label for="direction">旋回方向</label><select id="direction"><option value="right">右旋回</option><option value="left">左旋回</option></select></div>
+<div class="field"><div class="rangehead"><label for="angle">旋回角</label><output id="angleOut">90°</output></div><input id="angle" type="range" min="1" max="179" step="1" value="90"><div class="unit">1°刻み（180°は算出対象外）</div></div>
+<div class="field"><label for="windFrom">風向（FROM）</label><input id="windFrom" type="number" inputmode="decimal" min="0" max="359" value="000"><div class="unit">°</div></div>
+<div class="field"><label for="windSpeed">風速</label><input id="windSpeed" type="number" inputmode="decimal" min="0" max="300" value="0"><div class="unit">kt</div></div>
+</div></section>
+<section class="panel"><h2>計算結果</h2><div class="result"><div class="eyebrow">ウェイポイント手前の旋回開始距離</div><div class="big" id="lead">— <small>NM</small></div><div id="status" class="status">条件を入力してください。</div></div>
+<div class="metrics"><div class="metric"><span>旋回所要時間</span><strong id="duration">— s</strong></div><div class="metric"><span>旋回半径（対気）</span><strong id="radius">— NM</strong></div><div class="metric"><span>風の縦成分</span><strong id="wlong">— kt</strong></div><div class="metric"><span>風の横成分（右＋）</span><strong id="wright">— kt</strong></div></div>
+<div class="actions"><button id="reset">初期値に戻す</button><button id="copy">結果をコピー</button></div></section>
+<section class="panel"><h2>計算上の前提</h2><p class="note">
+・旋回率は一定の3°/秒、TASは旋回中一定とします。<br>
+・風向は気象通報のFROM方式として扱い、風の移動方向に変換します。<br>
+・風は旋回中一定とし、対気旋回軌跡と風による移流を合成します。<br>
+・旋回終了点がウェイポイントを通る次コースの直線上に来る条件から算出します。<br>
+・地形、乱気流、加減速、旋回率の立ち上がり、航法誤差等は考慮しません。
+</p></section><footer>計算補助用です。実運航では承認された航法資料・運航手順を優先し、結果を独立に検証してください。</footer>
+</main><script>
+const $=id=>document.getElementById(id),ids=["tas","heading","direction","angle","windFrom","windSpeed"];let last="";
+function f(n,d=2){return Number.isFinite(n)?n.toFixed(d):"—"}
+function calc(){
+ $("angleOut").textContent=$("angle").value+"°";
+ const V=+$("tas").value,H=+$("heading").value,s=$("direction").value==="right"?1:-1,A=+$("angle").value,F=+$("windFrom").value,W=+$("windSpeed").value;
+ const st=$("status"),out=$("lead");
+ if(!(V>0&&H>=0&&H<=359&&A>=1&&A<=179&&F>=0&&F<=359&&W>=0&&[V,H,A,F,W].every(Number.isFinite))){out.innerHTML='— <small>NM</small>';st.className="status warn";st.textContent="入力値を確認してください。";last="";return}
+ const a=A*Math.PI/180,theta=s*a,t=A/3,R=V/(60*Math.PI),beta=(F+180-H)*Math.PI/180;
+ const wl=W*Math.cos(beta),wr=W*Math.sin(beta),X=R*Math.sin(a)+wl*t/3600,Y=s*R*(1-Math.cos(a))+wr*t/3600;
+ const L=X-Y*Math.cos(theta)/Math.sin(theta);
+ $("duration").textContent=f(t,1)+" s";$("radius").textContent=f(R,3)+" NM";
+ $("wlong").textContent=(wl>=0?"+":"")+f(wl,1)+" kt";$("wright").textContent=(wr>=0?"+":"")+f(wr,1)+" kt";
+ out.innerHTML=f(L,2)+' <small>NM</small>';
+ if(L>0){st.className="status good";st.textContent="ウェイポイントの "+f(L,2)+" NM 手前から旋回を開始する計算結果です。"}
+ else if(Math.abs(L)<.005){st.className="status warn";st.textContent="計算上の旋回開始位置はウェイポイント付近です。"}
+ else{st.className="status bad";st.textContent="算出値が負です。この条件ではウェイポイント手前から旋回を開始する解になりません。"}
+ last=`Fly-by旋回開始距離: ${f(L,2)} NM\nTAS: ${V} kt\n機首方位: ${H}°\n旋回: ${s===1?"右":"左"} ${A}°\n風: ${F}° FROM / ${W} kt\n旋回率: 3°/秒`;
+}
+ids.forEach(id=>$(id).addEventListener("input",calc));
+$("reset").onclick=()=>{ $("tas").value=120;$("heading").value=0;$("direction").value="right";$("angle").value=90;$("windFrom").value=0;$("windSpeed").value=0;calc()};
+$("copy").onclick=async()=>{if(!last)return;try{await navigator.clipboard.writeText(last);$("copy").textContent="コピーしました";setTimeout(()=>$("copy").textContent="結果をコピー",1400)}catch(e){$("copy").textContent="コピー不可"}};
+calc();if("serviceWorker"in navigator&&location.protocol.startsWith("http"))addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
+</script></body></html>
